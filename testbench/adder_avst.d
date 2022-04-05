@@ -1,4 +1,5 @@
 import esdl;
+import esdl.intf.verilator.verilated;
 import uvm;
 import std.stdio;
 import std.string: format;
@@ -121,15 +122,13 @@ class avst_driver: uvm_driver!(avst_item)
 
   mixin uvm_component_utils;
   
-  @UVM_BUILD {
-    uvm_analysis_port!avst_item req_analysis;
-  }
-
-  Top top;
+  AvstIntf avst_in;
+  AvstIntf avst_out;
 
   this(string name, uvm_component parent = null) {
-    super(name,parent);
-    uvm_config_db!Top.get(this, "", "dut", top);
+    super(name, parent);
+    uvm_config_db!AvstIntf.get(this, "", "avst_in", avst_in);
+    uvm_config_db!AvstIntf.get(this, "", "avst_out", avst_out);
   }
 
 
@@ -138,44 +137,44 @@ class avst_driver: uvm_driver!(avst_item)
     while (true) {
       // uvm_info("AVL TRANSACTION", req.sprint(), UVM_DEBUG);
       // drive_vpi_port.put(req);
-      if (top.reset == 1) {
-	wait (top.clock.negedge());
+      if (avst_in.reset == 1) {
+	wait (avst_in.clock.negedge());
 	continue;
       }
 
-      if (top.dut.ready_in == 0 && top.dut.valid_out == 0) {
-	wait (top.clock.negedge());
+      if (avst_in.ready == 0 && avst_out.valid == 0) {
+	wait (avst_in.clock.negedge());
 	continue;
       }
 
-      if (top.dut.ready_in) {
+      if (avst_in.ready) {
 	seq_item_port.get_next_item(req);
 
 
-	wait (top.clock.negedge());
+	wait (avst_in.clock.negedge());
 
-	top.dut.data_in = req.data;
-	top.dut.end_in = req.end;
-	top.dut.valid_in = true;
+	avst_in.data = req.data;
+	avst_in.end = req.end;
+	avst_in.valid = true;
 
-	wait (top.clock.negedge());
+	wait (avst_in.clock.negedge());
 
-	top.dut.end_in = false;
-	top.dut.valid_in = false;
+	avst_in.end = false;
+	avst_in.valid = false;
 
-	req_analysis.write(req);
+	// req_analysis.write(req);
 	seq_item_port.item_done();
       }
-      else if (top.dut.valid_out) {
-	top.dut.ready_out = true;
-	wait (top.clock.negedge());
-	top.dut.ready_out = false;
+      else if (avst_out.valid) {
+	avst_out.ready = true;
+	wait (avst_out.clock.negedge());
+	avst_out.ready = false;
       }
     }
   }
 
-  protected void trans_received(avst_item tr) {}
-  protected void trans_executed(avst_item tr) {}
+  // protected void trans_received(avst_item tr) {}
+  // protected void trans_executed(avst_item tr) {}
 
 }
 
@@ -183,12 +182,12 @@ class avst_req_snooper: uvm_monitor
 {
   mixin uvm_component_utils;
 
-  Top top;
+  AvstIntf avst;
 
   this (string name, uvm_component parent = null) {
     super(name,parent);
-    uvm_config_db!Top.get(this, "", "dut", top);
-    assert (top !is null);
+    uvm_config_db!AvstIntf.get(this, "", "avst", avst);
+    assert (avst !is null);
   }
 
   @UVM_BUILD {
@@ -199,15 +198,15 @@ class avst_req_snooper: uvm_monitor
     super.run_phase(phase);
 
     while (true) {
-      wait (top.clock.negedge());
+      wait (avst.clock.negedge());
       wait (5.nsec);
-      if (top.reset == 1 ||
-	  top.dut.ready_in == 0 || top.dut.valid_in == 0)
+      if (avst.reset == 1 ||
+	  avst.ready == 0 || avst.valid == 0)
 	continue;
       else {
 	avst_item item = avst_item.type_id.create(get_full_name() ~ ".avst_item");
-	item.data = top.dut.data_in;
-	item.end = cast(bool) top.dut.end_in;
+	item.data = avst.data;
+	item.end = cast(bool) avst.end;
 	egress.write(item);
 	// uvm_info("AVL Monitored Req", item.sprint(), UVM_DEBUG);
 	// writeln("valid input");
@@ -221,12 +220,13 @@ class avst_rsp_snooper: uvm_monitor
 {
   mixin uvm_component_utils;
 
-  Top top;
+  AvstIntf avst;
+
 
   this (string name, uvm_component parent = null) {
     super(name,parent);
-    uvm_config_db!Top.get(this, "", "dut", top);
-    assert (top !is null);
+    uvm_config_db!AvstIntf.get(this, "", "avst", avst);
+    assert (avst !is null);
   }
 
   @UVM_BUILD {
@@ -237,21 +237,23 @@ class avst_rsp_snooper: uvm_monitor
     super.run_phase(phase);
 
     while (true) {
-      wait (top.clock.posedge());
+      wait (avst.clock.posedge());
       wait (5.nsec);
-      if (top.reset == 1 ||
-	  top.dut.ready_out == 0 || top.dut.valid_out == 0)
+      if (avst.reset == 1 ||
+	  avst.ready == 0 || avst.valid == 0)
 	continue;
       else {
 	avst_item item = avst_item.type_id.create(get_full_name() ~ ".avst_item");
-	item.data = top.dut.data_out;
-	item.end = cast(bool) top.dut.end_out;
+	item.data = avst.data;
+	item.end = cast(bool) avst.end;
 	egress.write(item);
 	// uvm_info("AVL Monitored Req", item.sprint(), UVM_DEBUG);
 	// writeln("valid input");
       }
     }
   }
+  
+
 }
 
 
@@ -310,7 +312,7 @@ class avst_scoreboard: uvm_scoreboard
       }
       else {
 	uvm_error("MISMATCHED", "Scoreboard received unmatched response");
-	writeln(expected, " ~= ", seq.phrase);
+	writeln(expected, " != ", seq.phrase);
       }
       phase_run.drop_objection(this);
     }
@@ -337,7 +339,7 @@ class avst_monitor: uvm_monitor
 
   void write(avst_item item) {
     if (seq is null) {
-      seq = new avst_phrase_seq();
+      seq = avst_phrase_seq.type_id.create("avst_seq");
     }
     seq ~= item;
     if (seq.is_finalized()) {
@@ -448,6 +450,17 @@ class avst_env: uvm_env
 
 }
 
+class AvstIntf: VlInterface
+{
+  Port!(Signal!(ubvec!1)) clock;
+  Port!(Signal!(ubvec!1)) reset;
+  
+  VlPort!ubyte data;
+  VlPort!ubyte end;
+  VlPort!ubyte valid;
+  VlPort!ubyte ready;
+}
+
 class Top: Entity
 {
   import Vadder_avst_euvm;
@@ -460,6 +473,9 @@ class Top: Entity
 
   DVadder_avst dut;
 
+  AvstIntf avstIn;
+  AvstIntf avstOut;
+  
   void opentrace(string vcdname) {
     if (_trace is null) {
       _trace = new VerilatedVcdD();
@@ -475,6 +491,28 @@ class Top: Entity
     }
   }
 
+  override void doConnect() {
+    import std.stdio;
+
+    //
+    avstIn.clock(clock);
+    avstIn.reset(reset);
+
+    avstIn.data(dut.data_in);
+    avstIn.end(dut.end_in);
+    avstIn.valid(dut.valid_in);
+    avstIn.ready(dut.ready_in);
+
+    // 
+    avstOut.clock(clock);
+    avstOut.reset(reset);
+
+    avstOut.data(dut.data_out);
+    avstOut.end(dut.end_out);
+    avstOut.valid(dut.valid_out);
+    avstOut.ready(dut.ready_out);
+  }
+
   override void doBuild() {
     dut = new DVadder_avst();
     traceEverOn(true);
@@ -483,6 +521,11 @@ class Top: Entity
   
   Task!stimulateClock stimulateClockTask;
   Task!stimulateReset stimulateResetTask;
+  Task!stimulateReadyOut stimulateReadyOutTask;
+
+  void stimulateReadyOut() {
+    dut.reset = true;
+  }
   
   void stimulateClock() {
     import std.stdio;
@@ -518,7 +561,7 @@ class Top: Entity
 
 class uvm_sha3_tb: uvm_tb
 {
-  Inst!Top top;
+  Top top;
 }
 
 void main(string[] args) {
@@ -533,9 +576,10 @@ void main(string[] args) {
   tb.initialize();
 
   tb.exec_in_uvm_context({
-      uvm_config_db!(Top).set(null, "uvm_test_top.env.agent.driver", "dut", tb.top);
-      uvm_config_db!(Top).set(null, "uvm_test_top.env.agent.req_snooper", "dut", tb.top);
-      uvm_config_db!(Top).set(null, "uvm_test_top.env.agent.rsp_snooper", "dut", tb.top);
+      uvm_config_db!(AvstIntf).set(null, "uvm_test_top.env.agent.driver", "avst_in", tb.top.avstIn);
+      uvm_config_db!(AvstIntf).set(null, "uvm_test_top.env.agent.driver", "avst_out", tb.top.avstOut);
+      uvm_config_db!(AvstIntf).set(null, "uvm_test_top.env.agent.req_snooper", "avst", tb.top.avstIn);
+      uvm_config_db!(AvstIntf).set(null, "uvm_test_top.env.agent.rsp_snooper", "avst", tb.top.avstOut);
     });
 			   
   tb.start();

@@ -11,7 +11,7 @@ VLATOR_SRC = euvm_dir/Vadder_avst_euvm.d euvm_dir/Vadder_avst_euvm_funcs.cpp obj
 all: avst_adder
 
 clean:
-	rm -f avst_adder* euvm_dir obj_dir verilator.stamp
+	rm -rf avst_adder* euvm_dir obj_dir verilator.stamp
 
 run: avst_adder
 	./avst_adder +UVM_TESTNAME=adder_avst.random_test +UVM_VERBOSITY=LOW # +UVM_OBJECTION_TRACE
@@ -27,6 +27,7 @@ euvm_dir/Vadder_avst_euvm.d euvm_dir/Vadder_avst_euvm_funcs.o euvm_dir/verilated
 
 
 avst_adder: euvm_dir/Vadder_avst_euvm.d ../testbench/adder_avst.d \
+	   $(LDC2BINDIR)/../import/esdl/intf/verilator/verilated.d \
 	   euvm_dir/Vadder_avst_euvm_funcs.o euvm_dir/verilated_vcd_d.o \
 	   obj_dir/Vadder_avst__ALL.a \
 	   obj_dir/verilated.o  obj_dir/verilated_vcd_c.o
