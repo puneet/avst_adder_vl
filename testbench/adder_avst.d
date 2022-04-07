@@ -166,6 +166,7 @@ class avst_driver: uvm_driver!(avst_item)
 	seq_item_port.item_done();
       }
       else if (avst_out.valid) {
+	wait (avst_out.clock.negedge());
 	avst_out.ready = true;
 	wait (avst_out.clock.negedge());
 	avst_out.ready = false;
@@ -178,11 +179,12 @@ class avst_driver: uvm_driver!(avst_item)
 
 }
 
-class avst_req_snooper: uvm_monitor
+class avst_snooper: uvm_monitor
 {
   mixin uvm_component_utils;
 
   AvstIntf avst;
+
 
   this (string name, uvm_component parent = null) {
     super(name,parent);
@@ -199,45 +201,6 @@ class avst_req_snooper: uvm_monitor
 
     while (true) {
       wait (avst.clock.negedge());
-      wait (5.nsec);
-      if (avst.reset == 1 ||
-	  avst.ready == 0 || avst.valid == 0)
-	continue;
-      else {
-	avst_item item = avst_item.type_id.create(get_full_name() ~ ".avst_item");
-	item.data = avst.data;
-	item.end = cast(bool) avst.end;
-	egress.write(item);
-	// uvm_info("AVL Monitored Req", item.sprint(), UVM_DEBUG);
-	// writeln("valid input");
-      }
-    }
-  }
-
-}
-
-class avst_rsp_snooper: uvm_monitor
-{
-  mixin uvm_component_utils;
-
-  AvstIntf avst;
-
-
-  this (string name, uvm_component parent = null) {
-    super(name,parent);
-    uvm_config_db!AvstIntf.get(this, "", "avst", avst);
-    assert (avst !is null);
-  }
-
-  @UVM_BUILD {
-    uvm_analysis_port!avst_item egress;
-  }
-  
-  override void run_phase(uvm_phase phase) {
-    super.run_phase(phase);
-
-    while (true) {
-      wait (avst.clock.posedge());
       wait (5.nsec);
       if (avst.reset == 1 ||
 	  avst.ready == 0 || avst.valid == 0)
@@ -371,8 +334,8 @@ class avst_agent: uvm_agent
     avst_monitor   req_monitor;
     avst_monitor   rsp_monitor;
 
-    avst_req_snooper   req_snooper;
-    avst_rsp_snooper   rsp_snooper;
+    avst_snooper   req_snooper;
+    avst_snooper   rsp_snooper;
 
     avst_scoreboard   scoreboard;
   }
