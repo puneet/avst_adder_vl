@@ -1,0 +1,6 @@
+sim/avst_adder
+sim/avst_adder.o
+sim/avst_adder.vcd
+sim/euvm_dir/
+sim/obj_dir/
+sim/verilator.stamp
